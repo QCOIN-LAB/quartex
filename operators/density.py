@@ -9,11 +9,11 @@ class Density(nn.Module):
     def forward(self, x):
         re_x, im_x = x
 
-        re_x_, im_x_ = re_x.unsqueeze(-1), im_x.unsqueeze(-1)
+        re_x, im_x = re_x.unsqueeze(-1), im_x.unsqueeze(-1)
 
-        re_x_ = torch.matmul(re_x_, re_x_.transpose(-2, -1)) \
+        re_x = torch.matmul(re_x, re_x.transpose(-2, -1)) \
             + torch.matmul(im_x, im_x.transpose(-2, -1))  
-        im_x_ = torch.matmul(im_x_, re_x_.transpose(-2, -1)) \
-            - torch.matmul(re_x_, im_x_.transpose(-2, -1))
+        im_x = torch.matmul(im_x, re_x.transpose(-2, -1)) \
+            - torch.matmul(re_x, im_x.transpose(-2, -1))
 
-        return (re_x_, im_x_)
+        return (re_x, im_x)

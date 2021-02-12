@@ -9,7 +9,7 @@ class Multiply(nn.Module):
     def forward(self, x):
         amp_x, pha_x = x
     
-        re_x_ = torch.cos(pha_x) * amp_x
-        im_x_ = torch.sin(pha_x) * amp_x
+        re_x = torch.cos(pha_x) * amp_x
+        im_x = torch.sin(pha_x) * amp_x
 
-        return (re_x_, im_x_)
+        return (re_x, im_x)
