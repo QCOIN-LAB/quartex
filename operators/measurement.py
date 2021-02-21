@@ -20,10 +20,15 @@ class Measurement(nn.Module):
         re_op, im_op = density((re_op, im_op))
         
         # only real part is non-zero
-        out = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
+        # only real part is non-zero
+        p = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
             - torch.matmul(im_x.flatten(-2, -1), im_op.flatten(-2, -1).t())
+        p = gumble_softmax(p, dim=-1)
         
-        return out
+        collapsed_re_x = torch.einsum('bse,emn->bsmn', p, re_op)
+        collapsed_im_x = torch.einsum('bse,emn->bsmn', p, im_op)
+        
+        return prob, (collapsed_re_x, collapsed_im_x)
        
     
     

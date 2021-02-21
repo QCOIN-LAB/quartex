@@ -114,7 +114,26 @@ def measurement(x, op):
     re_op, im_op = density((re_op, im_op))
     
     # only real part is non-zero
-    out = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
+    p = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
         - torch.matmul(im_x.flatten(-2, -1), im_op.flatten(-2, -1).t())
+    p = gumble_softmax(p, dim=-1)
     
-    return out
+    collapsed_re_x = torch.einsum('bse,emn->bsmn', p, re_op)
+    collapsed_im_x = torch.einsum('bse,emn->bsmn', p, im_op)
+    
+    return p, (collapsed_re_x, collapsed_im_x)
+
+def gumble_softmax(x, dim, temperature=0.1, force_hard=True):
+    x = F.softmax(x, dim=dim)
+    _, max_idx = x.max(dim, keepdim=True)
+    x_hard = torch.zeros_like(x).scatter_(dim, max_idx, 1.0)
+    
+    gumble_noise = torch.zeros_like(x).uniform_()
+    gumble_noise = - torch.log(1e-7 - torch.log(gumble_noise + 1e-7))
+    x = F.softmax((x + gumble_noise) / temperature, dim=dim)
+
+    if force_hard:
+        return x_hard - x.detach() + x, x # only differentiable wrt x
+    else:
+        return x
+
