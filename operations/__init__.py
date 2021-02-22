@@ -124,13 +124,13 @@ def measurement(x, op):
     return p, (collapsed_re_x, collapsed_im_x)
 
 def gumble_softmax(x, dim, temperature=0.1, force_hard=True):
-    x = F.softmax(x, dim=dim)
+    x = torch.div(x, torch.sum(x,dim=dim,keepdim=True))       
     _, max_idx = x.max(dim, keepdim=True)
     x_hard = torch.zeros_like(x).scatter_(dim, max_idx, 1.0)
     
     gumble_noise = torch.zeros_like(x).uniform_()
     gumble_noise = - torch.log(1e-7 - torch.log(gumble_noise + 1e-7))
-    x = F.softmax((x + gumble_noise) / temperature, dim=dim)
+    x = F.softmax((torch.log(x) + gumble_noise) / temperature, dim=dim)
 
     if force_hard:
         return x_hard - x.detach() + x, x # only differentiable wrt x
