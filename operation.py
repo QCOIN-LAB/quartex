@@ -8,6 +8,13 @@ import numpy as np
 
 # out-of-place operations
 
+def embedding(x, embed_param):
+    amp_embed = embed_param[0](x)
+    pha_embed = embed_param[1](x)
+    mix_embed = embed_param[2](x)
+
+    return (amp_embed, pha_embed), mix_embed
+
 def normalize(x):
     norm = torch.norm(x, dim=-1)
     x = F.normalize(x, p=2, dim=-1)
@@ -25,12 +32,12 @@ def multiply(x):
 def density(x):
     re_x, im_x = x
 
-    re_x, im_x = re_x.unsqueeze(-1), im_x.unsqueeze(-1)
+    re_x_, im_x_ = re_x.unsqueeze(-1), im_x.unsqueeze(-1)
 
-    re_x = torch.matmul(re_x, re_x.transpose(-2, -1)) \
-        + torch.matmul(im_x, im_x.transpose(-2, -1))  
-    im_x = torch.matmul(im_x, re_x.transpose(-2, -1)) \
-        - torch.matmul(re_x, im_x.transpose(-2, -1))
+    re_x = torch.matmul(re_x_, re_x_.transpose(-2, -1)) \
+        + torch.matmul(im_x_, im_x_.transpose(-2, -1))  
+    im_x = torch.matmul(im_x_, re_x_.transpose(-2, -1)) \
+        - torch.matmul(re_x_, im_x_.transpose(-2, -1))
 
     return (re_x, im_x)
 
@@ -71,12 +78,12 @@ def mixture(x, weight=None):
     re_x, im_x = x
 
     if weight is None:
-        re_x = torch.mean(re_x, dim=-3)
-        im_x = torch.mean(im_x, dim=-3) 
+        re_x = torch.mean(re_x, dim=-3, keepdim=True)
+        im_x = torch.mean(im_x, dim=-3, keepdim=True) 
     else:
-        weight = weight.unsqueeze(-1).unsqueeze(-1)
-        re_x = torch.sum(re_x * weight, dim=-3)
-        im_x = torch.sum(im_x * weight, dim=-3)
+        weight = weight.unsqueeze(-1)
+        re_x = torch.sum(re_x * weight, dim=-3, keepdim=True)
+        im_x = torch.sum(im_x * weight, dim=-3, keepdim=True)
     
     return (re_x, im_x)
 
@@ -106,12 +113,9 @@ def n_gram(x, n=3):
 
 def measurement(x, op):
     re_x, im_x = x
-    
-    amp_op, pha_op = op
-    amp_op, _ = normalize(amp_op)
 
-    re_op, im_op = multiply((amp_op, pha_op))
-    re_op, im_op = density((re_op, im_op))
+    op = multiply(op)
+    re_op, im_op = density(op)
     
     # only real part is non-zero
     p = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
@@ -123,17 +127,16 @@ def measurement(x, op):
     
     return p, (collapsed_re_x, collapsed_im_x)
 
-def gumble_softmax(x, dim, temperature=0.1, force_hard=True):
-    x = torch.div(x, torch.sum(x,dim=dim,keepdim=True))       
+def gumble_softmax(x, dim, temperature=0.1, force_hard=True):     
     _, max_idx = x.max(dim, keepdim=True)
     x_hard = torch.zeros_like(x).scatter_(dim, max_idx, 1.0)
     
     gumble_noise = torch.zeros_like(x).uniform_()
     gumble_noise = - torch.log(1e-7 - torch.log(gumble_noise + 1e-7))
-    x = F.softmax((torch.log(x) + gumble_noise) / temperature, dim=dim)
+    x = F.softmax((torch.log(x + 1e-7) + gumble_noise) / temperature, dim=dim)
 
     if force_hard:
-        return x_hard - x.detach() + x, x # only differentiable wrt x
+        return x_hard - x.detach() + x
     else:
         return x
 

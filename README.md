@@ -1,4 +1,4 @@
 ## QUARTEX
 
-**quantum-inspired neural network for text** with minimal implementation
+**QUAntum-inspiRed neural network for TEXt** with minimal implementation
 
