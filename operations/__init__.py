@@ -68,17 +68,17 @@ def superposition(x, weight=None):
         return (re_x, im_x)
 
 def mixture(x, weight=None):
-        re_x, im_x = x
+    re_x, im_x = x
 
-        if weight is None:
-            re_x = torch.mean(re_x, dim=-3)
-            im_x = torch.mean(im_x, dim=-3) 
-        else:
-            weight = weight.unsqueeze(-1).unsqueeze(-1)
-            re_x = torch.sum(re_x * weight, dim=-3)
-            im_x = torch.sum(im_x * weight, dim=-3)
-        
-        return (re_x, im_x)
+    if weight is None:
+        re_x = torch.mean(re_x, dim=-3)
+        im_x = torch.mean(im_x, dim=-3) 
+    else:
+        weight = weight.unsqueeze(-1).unsqueeze(-1)
+        re_x = torch.sum(re_x * weight, dim=-3)
+        im_x = torch.sum(im_x * weight, dim=-3)
+    
+    return (re_x, im_x)
 
 def n_gram(x, n=3):
     batch_size, seq_len = x.shape
@@ -116,10 +116,10 @@ def measurement(x, op):
     # only real part is non-zero
     p = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
         - torch.matmul(im_x.flatten(-2, -1), im_op.flatten(-2, -1).t())
-    p = gumble_softmax(p, dim=-1)
     
-    collapsed_re_x = torch.einsum('bse,emn->bsmn', p, re_op)
-    collapsed_im_x = torch.einsum('bse,emn->bsmn', p, im_op)
+    approx_one_hot = gumble_softmax(p, dim=-1)
+    collapsed_re_x = torch.einsum('bse,emn->bsmn', approx_one_hot, re_op)
+    collapsed_im_x = torch.einsum('bse,emn->bsmn', approx_one_hot, im_op)
     
     return p, (collapsed_re_x, collapsed_im_x)
 
