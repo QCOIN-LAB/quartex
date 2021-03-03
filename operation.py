@@ -9,14 +9,14 @@ import numpy as np
 # out-of-place operations
 
 def embedding(x, embed_param):
-    amp_embed = embed_param[0](x)
-    pha_embed = embed_param[1](x)
-    mix_embed = embed_param[2](x)
+    amp_embed = F.embedding(x, embed_param[0], padding_idx=0)
+    pha_embed = F.embedding(x, embed_param[1], padding_idx=0)
+    mix_embed = F.embedding(x, embed_param[2], padding_idx=0)
 
     return (amp_embed, pha_embed), mix_embed
 
 def normalize(x):
-    norm = torch.norm(x, dim=-1)
+    norm = torch.norm(x, p=2, dim=-1)
     x = F.normalize(x, p=2, dim=-1)
 
     return x, norm

@@ -60,11 +60,11 @@ def build_data_loader(data_path, tokenizer, data_collator):
 class BaseClassifier(nn.Module):
     def __init__(self, tokenizer):
         super(BaseClassifier, self).__init__()
-        self.amp_embed, self.pha_embed, self.mix_embed = param.embedding_param(tokenizer.token2id, './glove/glove.6B.50d.txt')
+        self.amp_embed_param, self.pha_embed_param, self.mix_embed_param = param.embedding_param(tokenizer.token2id, './glove/glove.6B.50d.txt')
         self.amp_param, self.pha_param = param.measurement_param(50, 2)
     
     def forward(self, x):
-        (amp_x, pha_x), mix_x  = op.embedding(x, (self.amp_embed, self.pha_embed, self.mix_embed))
+        (amp_x, pha_x), mix_x  = op.embedding(x, (self.amp_embed_param, self.pha_embed_param, self.mix_embed_param))
         weight = F.softmax(mix_x, dim=1)
         x = op.multiply((amp_x, pha_x))
         x = op.density(x)
