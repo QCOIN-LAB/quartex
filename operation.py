@@ -111,7 +111,7 @@ def n_gram(x, n=3):
     
     return ngram_mat
 
-def measurement(x, op):
+def measurement(x, op, collapse=True):
     re_x, im_x = x
 
     op = multiply(op)
@@ -121,13 +121,18 @@ def measurement(x, op):
     p = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
         - torch.matmul(im_x.flatten(-2, -1), im_op.flatten(-2, -1).t())
     
-    approx_one_hot = gumble_softmax(p, dim=-1)
-    collapsed_re_x = torch.einsum('bse,emn->bsmn', approx_one_hot, re_op)
-    collapsed_im_x = torch.einsum('bse,emn->bsmn', approx_one_hot, im_op)
+    if collapse:
+        approx_one_hot = gumble_softmax(p, dim=-1)
+        post_re_x = torch.einsum('bse,emn->bsmn', approx_one_hot, re_op)
+        post_im_x = torch.einsum('bse,emn->bsmn', approx_one_hot, im_op)
+    else:
+        post_re_x = torch.einsum('bse,emn->bsmn', p, re_op)
+        post_im_x = torch.einsum('bse,emn->bsmn', p, im_op)
     
-    return p, (collapsed_re_x, collapsed_im_x)
+    return p, (post_re_x, post_im_x)
 
-def gumble_softmax(x, dim, temperature=0.1, force_hard=True):     
+def gumble_softmax(x, dim, temperature=0.1, force_hard=True):  
+    #x = F.normalize(x, p=1, dim=-1)   
     _, max_idx = x.max(dim, keepdim=True)
     x_hard = torch.zeros_like(x).scatter_(dim, max_idx, 1.0)
     
