@@ -5,8 +5,8 @@ import torch.nn as nn
 import numpy as np
 
 import operation as op
-from utils.constraint import ConstrainedParameter, UnitNormConstraint, RangeConstraint
 
+from utils.constraint import ConstrainedParameter, UnitNormConstraint, RangeConstraint
 
 def embedding_param(token2id, from_path='./glove/glove.6B.50d.txt', embed_size=50, freeze=False):
     fin = open(from_path, 'r', encoding='utf-8', errors='ignore')
@@ -30,8 +30,9 @@ def embedding_param(token2id, from_path='./glove/glove.6B.50d.txt', embed_size=5
     return (embed_param, mix_param)
 
 def measurement_param(density_size, measurement_size=20):
-    measurement_param = ConstrainedParameter(torch.randn(measurement_size, density_size, dtype=torch.cfloat))
+    re_param = nn.init.orthogonal_(torch.empty(measurement_size, density_size, dtype=torch.float))
+    im_param = nn.init.constant_(torch.empty(measurement_size, density_size, dtype=torch.float), 0.0)
+    measurement_param = ConstrainedParameter(torch.complex(re_param, im_param))
     measurement_param.add_contraint(UnitNormConstraint())
-    #nn.init.orthogonal_(measurement_param.data)
 
     return measurement_param
