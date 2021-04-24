@@ -6,8 +6,8 @@ import torch
 
 class Tokenizer:
     def __init__(self):
-        self.token2id = {'[PAD]': 0, '[UNK]': 1}
-        self.id2token = {0: '[PAD]', 1: '[UNK]'}
+        self.token2id = {'<pad>': 0, '<unk>': 1}
+        self.id2token = {0: '<pad>', 1: '<unk>'}
 
     def add(self, token):
         if token not in self.token2id:
@@ -22,18 +22,10 @@ class Tokenizer:
         return text.split()
     
     def convert_tokens_to_ids(self, tokens):
-        ids = []
-        for token in tokens:
-            ids.append(self.token2id[token])
-
-        return ids
+        return [self.token2id[token] if token in self.token2id else self.token2id['<unk>'] for token in tokens]
 
     def convert_ids_to_tokens(self, ids):
-        tokens = []
-        for id in ids:
-            tokens.append(self.id2token[id])
-
-        return tokens
+        return [self.id2token[id] for id in ids]
 
 
 

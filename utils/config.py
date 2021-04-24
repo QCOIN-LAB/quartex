@@ -4,7 +4,7 @@ import numpy as np
 import configparser
 import argparse
 
-class Params(object):
+class Config(object):
     def __init__(self):
         pass
     def parse_config(self, config_file_path):

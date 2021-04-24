@@ -8,12 +8,15 @@ import numpy as np
 
 # out-of-place operations
 
-def embedding(x, embed_param):
-    amp_embed = F.embedding(x, embed_param[0], padding_idx=0)
-    pha_embed = F.embedding(x, embed_param[1], padding_idx=0)
-    mix_embed = F.embedding(x, embed_param[2], padding_idx=0)
+def embedding(x, embed_param, mix_param):
+    batch_size, x_len = x.shape
+    x = x.flatten(-2, -1)
+    embed = torch.index_select(embed_param, 0, x).reshape(batch_size, x_len, -1)
+    mix = torch.index_select(mix_param, 0, x).reshape(batch_size, x_len, -1)
+    #embed = F.embedding(x, embed_param, padding_idx=0)
+    #mix = F.embedding(x, mix_param, padding_idx=0)
 
-    return (amp_embed, pha_embed), mix_embed
+    return embed, mix
 
 def normalize(x):
     norm = torch.norm(x, p=2, dim=-1)
@@ -27,68 +30,47 @@ def multiply(x):
     re_x = torch.cos(pha_x) * amp_x
     im_x = torch.sin(pha_x) * amp_x
 
-    return (re_x, im_x)
+    return x
 
 def density(x):
-    re_x, im_x = x
+    x = x.unsqueeze(-1)
+    x = torch.matmul(x, x.transpose(-2, -1))
 
-    re_x_, im_x_ = re_x.unsqueeze(-1), im_x.unsqueeze(-1)
-
-    re_x = torch.matmul(re_x_, re_x_.transpose(-2, -1)) \
-        + torch.matmul(im_x_, im_x_.transpose(-2, -1))  
-    im_x = torch.matmul(im_x_, re_x_.transpose(-2, -1)) \
-        - torch.matmul(re_x_, im_x_.transpose(-2, -1))
-
-    return (re_x, im_x)
+    return x
 
 def composition(x, y):
-    re_x, im_x = x
-    x_len = re_x.shape[-2]
-    re_y, im_y = y
-    y_len = re_y.shape[-2]
+    x_len = x.shape[-2]
+    y_len = y.shape[-2]
 
-    re_x, im_x = re_x.unsqueeze(-1), im_x.unsqueeze(-1)
-    re_x = re_x.unsqueeze(-3).expand(-1, -1, y_len, -1, -1)
-    im_x = im_x.unsqueeze(-3).expand(-1, -1, y_len, -1, -1)
-    re_y, im_y = re_y.unsqueeze(-1), im_y.unsqueeze(-1)
-    re_y = re_y.unsqueeze(-4).expand(-1, x_len, -1, -1, -1)
-    im_y = im_y.unsqueeze(-4).expand(-1, x_len, -1, -1, -1)
+    x = x.unsqueeze(-1)
+    x = x.unsqueeze(-3).expand(-1, -1, y_len, -1, -1)
+    y = y.unsqueeze(-1)
+    y = y.unsqueeze(-4).expand(-1, x_len, -1, -1, -1)
 
-    re_z = torch.matmul(re_x, re_y.transpose(-2, -1)) \
-        + torch.matmul(im_x, im_y.transpose(-2, -1))  
-    im_z = torch.matmul(im_x, re_y.transpose(-2, -1)) \
-        - torch.matmul(re_x, im_y.transpose(-2, -1))
+    z = torch.matmul(x, y.transpose(-2, -1))
 
-    return (re_z.flatten(-2, -1), im_z.flatten(-2, -1))
+    return z.flatten(-2, -1)
 
 def superposition(x, weight=None):
-        re_x, im_x = x
-
-        if weight is None:
-            re_x = torch.mean(re_x, dim=-2)
-            im_x = torch.mean(im_x, dim=-2) 
-        else:
-            weight = weight.unsqueeze(-1)
-            re_x = torch.sum(re_x * weight, dim=-2)
-            im_x = torch.sum(im_x * weight, dim=-2)
-        
-        return (re_x, im_x)
-
-def mixture(x, weight=None):
-    re_x, im_x = x
-
     if weight is None:
-        re_x = torch.mean(re_x, dim=-3, keepdim=True)
-        im_x = torch.mean(im_x, dim=-3, keepdim=True) 
+        x = torch.mean(x, dim=-2)
     else:
         weight = weight.unsqueeze(-1)
-        re_x = torch.sum(re_x * weight, dim=-3, keepdim=True)
-        im_x = torch.sum(im_x * weight, dim=-3, keepdim=True)
+        x = torch.sum(x * weight, dim=-2)
     
-    return (re_x, im_x)
+    return x
 
-def n_gram(x, n=3):
-    batch_size, seq_len = x.shape
+def mixture(x, weight=None):
+    if weight is None:
+        x = torch.mean(x, dim=-3, keepdim=True)
+    else:
+        weight = weight.unsqueeze(-1)
+        x = torch.sum(x * weight, dim=-3, keepdim=True)
+    
+    return x
+
+def ngram(x, n=3):
+    batch_size, x_len = x.shape
 
     pad_len = n - 1
     left_pad_len = pad_len // 2
@@ -100,7 +82,7 @@ def n_gram(x, n=3):
     ngrams = []
     slice_begin_index = 0
     slice_end_index = -1
-    for i in range(seq_len):
+    for i in range(x_len):
         slice_begin_index = i
         slice_end_index = i + n
         slice_indices = torch.tensor(np.arange(slice_begin_index, slice_end_index), dtype=torch.long).to(x.device)
@@ -111,28 +93,22 @@ def n_gram(x, n=3):
     
     return ngram_mat
 
-def measurement(x, op, collapse=True):
-    re_x, im_x = x
-
-    op = multiply(op)
-    re_op, im_op = density(op)
+def measurement(x, measurement_param, collapse=True):
+    measurement_desity = density(measurement_param)
     
     # only real part is non-zero
-    p = torch.matmul(re_x.flatten(-2, -1), re_op.flatten(-2, -1).t()) \
-        - torch.matmul(im_x.flatten(-2, -1), im_op.flatten(-2, -1).t())
+    p = torch.matmul(x.flatten(-2, -1), measurement_desity.flatten(-2, -1).t()).real
     
-    if collapse:
+    if collapse: # collapse
         approx_one_hot = gumble_softmax(p, dim=-1)
-        post_re_x = torch.einsum('bse,emn->bsmn', approx_one_hot, re_op)
-        post_im_x = torch.einsum('bse,emn->bsmn', approx_one_hot, im_op)
-    else:
-        post_re_x = torch.einsum('bse,emn->bsmn', p, re_op)
-        post_im_x = torch.einsum('bse,emn->bsmn', p, im_op)
-    
-    return p, (post_re_x, post_im_x)
+        post_x = torch.einsum('bse,emn->bsmn', torch.complex(approx_one_hot, torch.zeros_like(approx_one_hot)), measurement_desity)
+    else: # post mixture
+        post_x = torch.einsum('bse,emn->bsmn', torch.complex(p, torch.zeros_like(p)), measurement_desity)
+        
+    return p, post_x
 
-def gumble_softmax(x, dim, temperature=0.1, force_hard=True):  
-    #x = F.normalize(x, p=1, dim=-1)   
+def gumble_softmax(x, dim, temperature=0.1, force_hard=True): 
+    #x = F.normalize(x, p=1, dim=-1)    
     _, max_idx = x.max(dim, keepdim=True)
     x_hard = torch.zeros_like(x).scatter_(dim, max_idx, 1.0)
     

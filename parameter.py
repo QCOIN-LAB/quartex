@@ -5,8 +5,8 @@ import torch.nn as nn
 import numpy as np
 
 import operation as op
-from utils.constraint import ConstrainedParameter, UnitNormConstraint, RangeConstraint
 
+from utils.constraint import ConstrainedParameter, UnitNormConstraint, RangeConstraint
 
 def embedding_param(token2id, from_path='./glove/glove.6B.50d.txt', embed_size=50, freeze=False):
     fin = open(from_path, 'r', encoding='utf-8', errors='ignore')
@@ -19,27 +19,20 @@ def embedding_param(token2id, from_path='./glove/glove.6B.50d.txt', embed_size=5
             embed_mat[token2id[token]] = np.asarray(vec, dtype=np.float32)
     fin.close()
 
-    embed_mat = torch.from_numpy(embed_mat)
-    sign_mat = torch.sign(embed_mat)
-    amp_embed = sign_mat * embed_mat
-    amp_embed, mix_embed = op.normalize(amp_embed)
-    amp_embed_param = ConstrainedParameter(amp_embed)
-    amp_embed_param.add_contraint(UnitNormConstraint())
-    mix_embed_param = nn.Parameter(mix_embed.unsqueeze(-1))
-    pha_embed = np.pi * (1 - sign_mat) / 2 # based on phase belongs to [0, 2*pi]
-    # when amp is 0, pha shoule be randomly initialized
-    pha_embed[sign_mat == 0] = (2 * np.pi * torch.rand_like(pha_embed))[sign_mat == 0]
-    pha_embed_param = ConstrainedParameter(pha_embed)
-    pha_embed_param.add_contraint(RangeConstraint(0, 2 * np.pi))
+    embed_mat = torch.from_numpy(embed_mat).float()
+    re_embed, mix = op.normalize(embed_mat)
+    im_embed = torch.zeros_like(re_embed)
 
-    return (amp_embed_param, pha_embed_param, mix_embed_param)
+    embed_param = ConstrainedParameter(torch.complex(re_embed, im_embed))
+    embed_param.add_contraint(UnitNormConstraint())
+    mix_param = nn.Parameter(mix.unsqueeze(-1))
+
+    return (embed_param, mix_param)
 
 def measurement_param(density_size, measurement_size=20):
-    amp_param = ConstrainedParameter(torch.DoubleTensor(measurement_size, density_size))
-    amp_param.add_contraint(UnitNormConstraint())
-    nn.init.orthogonal_(amp_param.data)
-    pha_param = ConstrainedParameter(torch.DoubleTensor(measurement_size, density_size))
-    pha_param.add_contraint(RangeConstraint(0, 2 * np.pi))
-    nn.init.constant_(pha_param.data, 0.0)
+    re_param = nn.init.orthogonal_(torch.empty(measurement_size, density_size, dtype=torch.float))
+    im_param = nn.init.constant_(torch.empty(measurement_size, density_size, dtype=torch.float), 0.0)
+    measurement_param = ConstrainedParameter(torch.complex(re_param, im_param))
+    measurement_param.add_contraint(UnitNormConstraint())
 
-    return (amp_param, pha_param)
+    return measurement_param
